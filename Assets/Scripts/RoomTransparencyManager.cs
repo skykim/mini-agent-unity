@@ -22,10 +22,10 @@ public class RoomTransparencyManager : MonoBehaviour
     [SerializeField] private Transform _tiger;
 
     [Header("Room Boundaries (X Coordinates)")]
-    [Tooltip("Boundary X coordinate between Kitchen and Living Room (default: 15)")]
+    [Tooltip("Boundary X between Kitchen and Living Room (default: 15)")]
     [SerializeField] private float _kitchenToLivingX = 15f;
 
-    [Tooltip("Boundary X coordinate between Living Room and Bedroom (default: 45)")]
+    [Tooltip("Boundary X between Living Room and Bedroom (default: 45)")]
     [SerializeField] private float _livingToBedroomX = 45f;
 
     [Header("Transparency Settings")]
@@ -33,7 +33,7 @@ public class RoomTransparencyManager : MonoBehaviour
     [Tooltip("Transparency percent (0% = fully opaque, 100% = fully transparent)")]
     [SerializeField] private float _transparencyPercent = 75f;
 
-    [Tooltip("Transparency transition smoothing time (seconds, 0 for instant transition)")]
+    [Tooltip("Transparency fade duration (seconds; 0 = instant)")]
     [SerializeField] private float _fadeDuration = 0.25f;
 
     [Header("Room Root GameObjects")]
@@ -227,6 +227,12 @@ public class RoomTransparencyManager : MonoBehaviour
                 transMat.EnableKeyword("_SURFACE_TYPE_TRANSPARENT");
                 transMat.renderQueue = (int)UnityEngine.Rendering.RenderQueue.Transparent;
 
+                // HomeDeviceController drives lamp/screen emission through MPBs, which only
+                // render while the ACTIVE material has _EMISSION enabled. The clone is made
+                // before that controller lazily enables the keyword on the originals, so
+                // enable it here or emissive devices go dark whenever their room is faded.
+                if (transMat.HasProperty("_EmissionColor")) transMat.EnableKeyword("_EMISSION");
+
                 Color c = transMat.HasProperty("_BaseColor") ? transMat.GetColor("_BaseColor") : Color.white;
                 origColors[i] = c;
                 transMats[i] = transMat;
@@ -268,7 +274,7 @@ public class RoomTransparencyManager : MonoBehaviour
         switch (_currentRoom)
         {
             case RoomState.Kitchen:
-                // In Kitchen: keep Kitchen and X15 wall opaque, others (Living Room, X45 wall, Bedroom) transparent
+                // In the Kitchen: keep Kitchen + X15 wall opaque; fade the rest (Living, X45 wall, Bedroom)
                 _kitchenGroup.targetAlpha = 1f;
                 _wallX15Group.targetAlpha = 1f;
                 _livingGroup.targetAlpha = transparentAlpha;
@@ -277,7 +283,7 @@ public class RoomTransparencyManager : MonoBehaviour
                 break;
 
             case RoomState.LivingRoom:
-                // In Living Room: keep Living Room and X45 wall opaque, others (Kitchen, X15 wall, Bedroom) transparent
+                // In the Living Room: keep Living + X45 wall opaque; fade the rest (Kitchen, X15 wall, Bedroom)
                 _kitchenGroup.targetAlpha = transparentAlpha;
                 _wallX15Group.targetAlpha = transparentAlpha;
                 _livingGroup.targetAlpha = 1f;
@@ -286,7 +292,7 @@ public class RoomTransparencyManager : MonoBehaviour
                 break;
 
             case RoomState.Bedroom:
-                // In Bedroom: keep only Bedroom opaque, all others (Kitchen, X15 wall, Living Room, X45 wall) transparent
+                // In the Bedroom: keep only Bedroom opaque; fade the rest (Kitchen, X15 wall, Living, X45 wall)
                 _kitchenGroup.targetAlpha = transparentAlpha;
                 _wallX15Group.targetAlpha = transparentAlpha;
                 _livingGroup.targetAlpha = transparentAlpha;
