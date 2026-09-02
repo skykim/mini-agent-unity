@@ -11,7 +11,7 @@ An **on-device smart-home agent** built in Unity. A tiger lives in an isometric 
 * **Hybrid:** a schema gate validates every call; anything that isn't a valid home action defers to an optional cloud LLM.
 
 ## 🗣 What you can say
-17 tools span home control and information retrieval:
+16 tools span home control and information retrieval:
 
 | Category | Tools | Example |
 |---|---|---|
@@ -19,7 +19,6 @@ An **on-device smart-home agent** built in Unity. A tiger lives in an isometric 
 | TV / Computer | `turn_on_tv` / `turn_off_tv`, `turn_on_computer` / `turn_off_computer` | `turn off the living room TV` |
 | Music | `play_music` (room, volume, genre: rock/jazz/lofi), `stop_music`, `set_volume` (0–100), `get_volume` | `play some jazz`, `set the volume to 60` |
 | Cleaning | `start_vacuum` (room) | `start the vacuum` |
-| Climate | `set_temperature` (room, °C 5–35) | `set the bedroom to 24°C` |
 | Info | `get_weather` (city), `get_time` (city), `get_location`, `web_search` (query) | `what's the weather in Seoul?`, `what time is it?` |
 
 Rooms: **kitchen**, **living room**, **bedroom** (room-less commands resolve to a sensible default). Room and device names accept synonyms in both languages.
@@ -46,7 +45,7 @@ Rooms: **kitchen**, **living room**, **bedroom** (room-less commands resolve to 
      │    turn_on_light / turn_off_light / set_light_color
      │    turn_on_tv / turn_off_tv / turn_on_computer / turn_off_computer
      │    play_music / stop_music / set_volume / get_volume
-     │    start_vacuum / set_temperature
+     │    start_vacuum
      │
      └─ info tools (network) ──────────►  AgentInfoApis
           get_time / get_location / get_weather
@@ -67,10 +66,10 @@ The model is FunctionGemma-270M-it (Gemma3 architecture: 18 layers, multi-query 
 The prompt is assembled to be byte-identical to the fine-tuning chat template; the model emits a flat call format `call:NAME{key:<escape>value<escape>}`.
 
 **2. Parse & validate: `FgCallParser` + `ToolCallValidation.cs`**
-`FgCallParser.ParseAll` extracts one or more calls from the raw text (handling the escape spans and multiple calls). Each parsed call passes through a schema gate that checks the tool exists and every argument is well-typed and in range (enums like light colors, numeric bounds like brightness/volume/temperature). Invalid calls are rejected and logged, never executed.
+`FgCallParser.ParseAll` extracts one or more calls from the raw text (handling the escape spans and multiple calls). Each parsed call passes through a schema gate that checks the tool exists and every argument is well-typed and in range (enums like light colors, numeric bounds like brightness/volume). Invalid calls are rejected and logged, never executed.
 
 **3. Execute: `HomeDeviceController.cs` + `TigerController.cs`**
-Valid calls mutate device state (lights, TV, computer, speaker + volume/genre, vacuum, temperature). The tiger (a `NavMeshAgent`) navigates to the relevant device before the state changes, on a NavMesh baked at startup by `RuntimeNavMeshBake`. Responses render in a world-space bubble (`TigerSpeechBubble`). Info tools (`get_weather`, `get_time`, `get_location`, `web_search`) call live web APIs in `AgentInfoApis.cs`; `web_search` additionally grounds a synthesized answer through the cloud LLM.
+Valid calls mutate device state (lights, TV, computer, speaker + volume/genre, vacuum). The tiger (a `NavMeshAgent`) navigates to the relevant device before the state changes, on a NavMesh baked at startup by `RuntimeNavMeshBake`. Responses render in a world-space bubble (`TigerSpeechBubble`). Info tools (`get_weather`, `get_time`, `get_location`, `web_search`) call live web APIs in `AgentInfoApis.cs`; `web_search` additionally grounds a synthesized answer through the cloud LLM.
 
 **4. Cloud fallback: `AgentCloudClient.cs` (optional)**
 When no valid tool call comes out (e.g. `오늘 기분 어때?`), the turn defers to a cloud LLM over an **OpenAI-compatible** chat-completions endpoint, with a persona system prompt. Turn the toggle off to run purely on-device; home control still works.
@@ -115,7 +114,7 @@ Assets/
 │  ├─ TigerSpeechBubble.cs        # world-space response bubble
 │  └─ MiniAgentTestRunner.cs      # optional scripted auto-run of a command list
 ├─ Scripts/
-│  ├─ HomeDeviceController.cs     # device state (lights, TV, speaker, vacuum, climate)
+│  ├─ HomeDeviceController.cs     # device state (lights, TV, speaker, vacuum)
 │  ├─ TigerController.cs          # WASD + NavMesh movement
 │  └─ RoomTransparencyManager.cs  # fades away walls of the room in view
 ├─ Resources/Music/              # jazz.wav / lofi.wav / rock.wav (synthesized loops)
