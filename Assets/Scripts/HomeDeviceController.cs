@@ -305,7 +305,9 @@ public class HomeDeviceController : MonoBehaviour
     {
         public Transform lamp;
         public Light light;
-        public readonly List<Renderer> rends = new();   // renderers whose material can emit
+        // (renderer, emissive submaterial index): only the lamp's emissive material glows,
+        // driven per-index so the body submaterial stays dark.
+        public readonly List<(Renderer rend, int index)> rends = new();
         public bool on;
         public int brightness = 100;
         public Color color = new(1f, 0.85f, 0.6f);
@@ -333,13 +335,32 @@ public class HomeDeviceController : MonoBehaviour
         // swaps renderer.sharedMaterials for fading, which would wipe any tint written to a
         // material instance; an MPB rides on the renderer and survives those swaps. We only
         // need the _EMISSION keyword enabled on the assigned materials.
+        // Only the lamp's EMISSIVE submaterial should glow, not the body. The kit's bulb/
+        // shade materials are named "lamp_emissive_*", so match those by name and drive
+        // emission per submaterial index — a whole-renderer MPB would light every index,
+        // including the body (URP Lit body materials also carry _EmissionColor).
         foreach (var r in lamp.GetComponentsInChildren<Renderer>(true))
         {
-            bool emits = false;
-            foreach (var m in r.sharedMaterials)
-                if (m != null && m.HasProperty("_EmissionColor")) { m.EnableKeyword("_EMISSION"); emits = true; }
-            if (emits) st.rends.Add(r);
+            var mats = r.sharedMaterials;
+            for (int i = 0; i < mats.Length; i++)
+            {
+                var m = mats[i];
+                if (m == null || !m.HasProperty("_EmissionColor")) continue;
+                if (m.name.IndexOf("emiss", System.StringComparison.OrdinalIgnoreCase) < 0) continue;
+                m.EnableKeyword("_EMISSION");
+                st.rends.Add((r, i));
+            }
         }
+        // Fallback for a lamp with a single combined material (no "emissive"-named sub):
+        // light every _EmissionColor submaterial so the lamp still glows.
+        if (st.rends.Count == 0)
+            foreach (var r in lamp.GetComponentsInChildren<Renderer>(true))
+            {
+                var mats = r.sharedMaterials;
+                for (int i = 0; i < mats.Length; i++)
+                    if (mats[i] != null && mats[i].HasProperty("_EmissionColor"))
+                    { mats[i].EnableKeyword("_EMISSION"); st.rends.Add((r, i)); }
+            }
         _lightState[lamp] = st;
         return st;
     }
@@ -354,11 +375,11 @@ public class HomeDeviceController : MonoBehaviour
         // colored even at high intensity instead of washing out to white.
         Color emit = st.on ? st.color * (0.7f + 2.0f * k) : Color.black;
         s_Mpb ??= new MaterialPropertyBlock();
-        foreach (var r in st.rends)
+        foreach (var (r, idx) in st.rends)
         {
-            r.GetPropertyBlock(s_Mpb);
+            r.GetPropertyBlock(s_Mpb, idx);
             s_Mpb.SetColor("_EmissionColor", emit);
-            r.SetPropertyBlock(s_Mpb);
+            r.SetPropertyBlock(s_Mpb, idx);
         }
     }
 

@@ -59,12 +59,10 @@ public class HomeAgentConnector : MonoBehaviour
 
     ToolCallValidator m_Validator;
     bool m_Busy, m_Ready;
-    // network fetch time accumulated across info/web tools this turn, shown separately
-    // from the on-device generation time: "name{..} call {gen}ms + fetch {net}ms".
-    long m_FetchMs;
-    int m_NetCalls;
-    // cloud-LLM synthesis time for web_search (retrieve-then-answer), shown as "+ llm {ms}".
-    long m_LlmMs;
+    // Per-turn status timing segments: each network op (an info fetch, web_search's
+    // retrieval, and its cloud-LLM synthesis) appends its own labelled entry, so the
+    // status reads e.g. "web_search{q} 1600ms + fetch 240ms + cloud_llm 900ms".
+    readonly List<string> m_NetSegs = new List<string>();
 
     public bool IsReady => m_Ready;
     public bool IsBusy => m_Busy;
@@ -193,28 +191,24 @@ public class HomeAgentConnector : MonoBehaviour
         if (calls.Count > 0)
             SetStatus($"{callLabel} {agentMs}ms");
 
-        m_FetchMs = 0; m_NetCalls = 0; m_LlmMs = 0;
+        m_NetSegs.Clear();
         var responses = new List<string>();
         foreach (var call in calls)
         {
             yield return ExecuteCall(call, responses);
         }
 
-        // Info/web tools hit the network: show the on-device generation time, the fetch
-        // time, and (for web_search's grounded synthesis) the cloud-LLM time separately.
-        if (calls.Count > 0 && m_NetCalls > 0)
-        {
-            string t = $"{callLabel} call {agentMs}ms + fetch {m_FetchMs}ms";
-            if (m_LlmMs > 0) t += $" + llm {m_LlmMs}ms";
-            SetStatus(t);
-        }
+        // Info/web tools hit the network: the on-device generation time followed by each
+        // network op's own labelled timing (built in ExecuteCall), e.g.
+        // "web_search{q} 1600ms + fetch 240ms + cloud_llm 900ms".
+        if (calls.Count > 0 && m_NetSegs.Count > 0)
+            SetStatus($"{callLabel} {agentMs}ms + {string.Join(" + ", m_NetSegs)}");
 
         bool usedCloud = false; long cloudMs = 0;
         if (calls.Count == 0)
         {
             if (_useCloudFallback)
             {
-                SetStatus("Asking the cloud...");
                 string ans = null;
                 yield return AgentCloudClient.Complete(CloudSystemPrompt, user, _cloudEndpoint, _cloudModel,
                                                        (a, ms) => { ans = a; cloudMs = ms; });
@@ -352,21 +346,21 @@ public class HomeAgentConnector : MonoBehaviour
             {
                 var fsw = System.Diagnostics.Stopwatch.StartNew(); string wx = null;
                 yield return AgentInfoApis.GetWeather(Arg(call, "city") ?? "", a => wx = a);
-                fsw.Stop(); m_FetchMs += fsw.ElapsedMilliseconds; m_NetCalls++;
+                fsw.Stop(); m_NetSegs.Add($"fetch {fsw.ElapsedMilliseconds}ms");
                 responses.Add(wx); break;
             }
             case "get_time":
             {
                 var fsw = System.Diagnostics.Stopwatch.StartNew(); string tm = null;
                 yield return AgentInfoApis.GetTime(Arg(call, "city"), a => tm = a);
-                fsw.Stop(); m_FetchMs += fsw.ElapsedMilliseconds; m_NetCalls++;
+                fsw.Stop(); m_NetSegs.Add($"fetch {fsw.ElapsedMilliseconds}ms");
                 responses.Add(tm); break;
             }
             case "get_location":
             {
                 var fsw = System.Diagnostics.Stopwatch.StartNew(); string loc = null;
                 yield return AgentInfoApis.GetLocation(a => loc = a);
-                fsw.Stop(); m_FetchMs += fsw.ElapsedMilliseconds; m_NetCalls++;
+                fsw.Stop(); m_NetSegs.Add($"fetch {fsw.ElapsedMilliseconds}ms");
                 responses.Add(loc); break;
             }
             // web_search = RETRIEVE (DuckDuckGo) -> SYNTHESIZE (cloud LLM over the results).
@@ -379,7 +373,7 @@ public class HomeAgentConnector : MonoBehaviour
                 // 1) retrieve context from the web
                 var fsw = System.Diagnostics.Stopwatch.StartNew(); string context = null;
                 yield return AgentInfoApis.WebSearchRetrieve(query, c => context = c);
-                fsw.Stop(); m_FetchMs += fsw.ElapsedMilliseconds; m_NetCalls++;
+                fsw.Stop(); m_NetSegs.Add($"fetch {fsw.ElapsedMilliseconds}ms");
                 // 2) synthesize a grounded answer with the cloud LLM
                 string answer = null;
                 if (_useCloudFallback)
@@ -396,7 +390,7 @@ public class HomeAgentConnector : MonoBehaviour
                         : $"Question: {query}\n\nWeb search results:\n{context}";
                     var lsw = System.Diagnostics.Stopwatch.StartNew(); string ans = null;
                     yield return AgentCloudClient.Complete(sys, prompt, _cloudEndpoint, _cloudModel, (a, _) => ans = a);
-                    lsw.Stop(); m_LlmMs += lsw.ElapsedMilliseconds;
+                    lsw.Stop(); m_NetSegs.Add($"cloud_llm {lsw.ElapsedMilliseconds}ms");
                     if (!string.IsNullOrEmpty(ans) && !ans.StartsWith("(cloud")) answer = ans;
                 }
                 // 3) fallback: raw retrieved snippet, or a not-found note
