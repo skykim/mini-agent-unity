@@ -1,5 +1,6 @@
 {
   "dependencies": {
+    "com.sky-kim.functiongemma-home": "https://huggingface.co/Sky-Kim/com.sky.sentis.functiongemma.home.git",
     "com.unity.ai.inference": "2.6.1",
     "com.unity.ai.navigation": "2.0.14",
     "com.unity.collab-proxy": "2.13.3",

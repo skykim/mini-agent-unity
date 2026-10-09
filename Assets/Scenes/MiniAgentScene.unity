@@ -5744,7 +5744,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: e5d158cb0ad7940bd8de5c306ab54425, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::SentisSkills.Inference.FunctionGemmaGenerator
-  streamingModelPath: Agent/functiongemma_home_uint8.sentis
+  streamingModelPath: Agent/functiongemma_home_f32.sentis
   streamingTokenizerPath: Agent/tokenizer.json
   streamingDevBlockPath: Agent/fg_dev_block_home.txt
   backend: 256
