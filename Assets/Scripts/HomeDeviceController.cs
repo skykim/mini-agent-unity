@@ -7,7 +7,7 @@ using UnityEngine;
 /// interactive objects, knows which device lives in which room, and exposes a small
 /// verb API (lights / TV / computer / speaker / vacuum) plus Tiger navigation.
 ///
-/// Nothing here knows about the LLM — the model-connector layer (added next) parses
+/// Nothing here knows about the LLM — the connector parses
 /// tool calls and calls into these methods. Every device method returns <c>true</c>
 /// only if that device actually exists in the requested room, so the connector can
 /// report "there's no such device in that room" for the asymmetric rooms
@@ -201,20 +201,15 @@ public class HomeDeviceController : MonoBehaviour
 
     // ---------------- speaker ----------------
 
-    public bool SetMusic(Room room, bool on, int? volume = null, string genre = null)
+    public bool SetMusic(Room room, bool on, string genre = null)
     {
         var sp = _rooms[room].speaker;
         if (sp == null) return false;
         _speakerState ??= new SpeakerState(sp);
-        if (volume.HasValue) _speakerState.volume = Mathf.Clamp(volume.Value, 0, 100);
         if (!string.IsNullOrEmpty(genre)) _speakerState.genre = genre;
         _speakerState.SetPlaying(on);
         return true;
     }
-
-    /// <summary>Current music genre on the speaker (empty if none set).</summary>
-    public string GetGenre(Room room) => _rooms[room].speaker == null ? null
-        : (_speakerState != null ? _speakerState.genre : "");
 
     public bool SetVolume(Room room, int volume)
     {
@@ -237,8 +232,8 @@ public class HomeDeviceController : MonoBehaviour
 
     // ---------------- vacuum ----------------
 
-    /// <summary>Start the robot vacuum patrol (Bedroom robot). room is advisory.</summary>
-    public bool StartVacuum(Room? room)
+    /// <summary>Start the bedroom robot vacuum patrol.</summary>
+    public bool StartVacuum()
     {
         if (_robotCleaner == null) return false;
         if (_vacuumCo != null) StopCoroutine(_vacuumCo);
@@ -303,7 +298,6 @@ public class HomeDeviceController : MonoBehaviour
 
     private sealed class LightState
     {
-        public Transform lamp;
         public Light light;
         // (renderer, emissive submaterial index): only the lamp's emissive material glows,
         // driven per-index so the body submaterial stays dark.
@@ -317,7 +311,7 @@ public class HomeDeviceController : MonoBehaviour
     private LightState LightOf(Transform lamp)
     {
         if (_lightState.TryGetValue(lamp, out var st)) return st;
-        st = new LightState { lamp = lamp };
+        st = new LightState();
         // reuse the lamp's built-in point light (e.g. "LampGlow") if it has one;
         // otherwise create one, so every room light is controllable AND starts off
         st.light = lamp.GetComponentInChildren<Light>(true);
@@ -426,16 +420,12 @@ public class HomeDeviceController : MonoBehaviour
 
     private sealed class SpeakerState
     {
-        public readonly Transform speaker;
         public readonly AudioSource src;
         public int volume = 50;
-        public bool playing;
         public string genre = "";
-        private readonly Vector3 _baseScale;
 
         public SpeakerState(Transform sp)
         {
-            speaker = sp; _baseScale = sp.localScale;
             // `??` does not respect Unity's fake-null, so use an explicit == null check
             src = sp.GetComponent<AudioSource>();
             if (src == null) src = sp.gameObject.AddComponent<AudioSource>();
@@ -444,7 +434,6 @@ public class HomeDeviceController : MonoBehaviour
         }
         public void SetPlaying(bool on)
         {
-            playing = on;
             ApplyVolume();
             ApplyClip();   // genre may have changed since the last play
             if (on && !src.isPlaying) src.Play();

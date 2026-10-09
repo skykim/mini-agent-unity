@@ -94,7 +94,6 @@ public class TigerController : MonoBehaviour
 
         if (!_navAgent.pathPending)
         {
-            // arrived
             if (_navAgent.remainingDistance <= ArriveDistance) { _autoPilot = false; return Vector3.zero; }
             // no route to the target (off-mesh target, blocked) — bail fast instead of
             // steering nowhere until the walk timeout.
@@ -132,21 +131,18 @@ public class TigerController : MonoBehaviour
         // Build movement action inline — no .inputactions asset dependency
         _moveAction = new InputAction("Move", InputActionType.Value);
 
-        // WASD bindings
         _moveAction.AddCompositeBinding("2DVector")
             .With("Up",    "<Keyboard>/w")
             .With("Down",  "<Keyboard>/s")
             .With("Left",  "<Keyboard>/a")
             .With("Right", "<Keyboard>/d");
 
-        // Arrow key bindings
         _moveAction.AddCompositeBinding("2DVector")
             .With("Up",    "<Keyboard>/upArrow")
             .With("Down",  "<Keyboard>/downArrow")
             .With("Left",  "<Keyboard>/leftArrow")
             .With("Right", "<Keyboard>/rightArrow");
 
-        // Jump on Space
         _jumpAction = new InputAction("Jump", InputActionType.Button, "<Keyboard>/space");
     }
 
@@ -207,7 +203,6 @@ public class TigerController : MonoBehaviour
             _coyoteTimer = 0f;
         }
 
-        // Move the character
         Vector3 velocity = move * _moveSpeed + Vector3.up * _vy;
         _cc.Move(velocity * Time.deltaTime);
 
@@ -215,7 +210,6 @@ public class TigerController : MonoBehaviour
         if (_navAgent != null && _navAgent.isActiveAndEnabled && _navAgent.isOnNavMesh)
             _navAgent.nextPosition = transform.position;
 
-        // Rotate smoothly toward movement direction
         if (move.sqrMagnitude > 0.0001f)
         {
             Quaternion targetRotation = Quaternion.LookRotation(move, Vector3.up);
@@ -223,7 +217,6 @@ public class TigerController : MonoBehaviour
                 transform.rotation, targetRotation, _turnSpeed * Time.deltaTime);
         }
 
-        // Drive blend tree
         if (_animator != null)
             _animator.SetFloat("Speed", move.magnitude);
     }

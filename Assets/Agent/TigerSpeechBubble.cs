@@ -4,13 +4,8 @@ using UnityEngine.UI;
 
 /// <summary>
 /// A speech bubble that floats above Tiger's head and shows the agent's reply.
-///
-/// It is drawn on its OWN Screen-Space-Overlay canvas (high sortingOrder) and
-/// positioned every frame at the screen projection of Tiger's head. Overlay UI
-/// always renders on top of ALL 3D geometry, so the bubble is never occluded by
-/// walls or furniture — no depth/ZTest tricks needed (URP's Unlit/Text shaders
-/// ignore a material _ZTest, which is why the old world-space quad got hidden).
-///
+/// Drawn on its own Screen-Space-Overlay canvas, so walls and furniture never occlude it.
+/// Positioned every frame at the screen projection of Tiger's head.
 /// Call <see cref="Say"/> to show text for a few seconds.
 /// </summary>
 public class TigerSpeechBubble : MonoBehaviour

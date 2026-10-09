@@ -60,7 +60,7 @@ public class MiniAgentTestRunner : MonoBehaviour
         yield return Run(conn);
     }
 
-    /// <summary>Submit every command in order. Also callable manually (e.g. from a button).</summary>
+    /// <summary>Submit every command in order.</summary>
     public IEnumerator Run(HomeAgentConnector conn)
     {
         if (conn == null) conn = FindAnyObjectByType<HomeAgentConnector>();

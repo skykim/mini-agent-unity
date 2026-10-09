@@ -5,8 +5,7 @@
 // Uses the local Ollama daemon at localhost:11434, which proxies the cloud model
 // gpt-oss:120b-cloud to ollama.com — auth is handled once by `ollama signin` at the
 // daemon, so no per-request API key is needed. Coroutine + UnityWebRequest.
-// NOTE: localhost is HTTP, so the player must allow insecure HTTP (set in
-// AgentChatSceneSetup / GameViewCapture via PlayerSettings.insecureHttpOption).
+// NOTE: localhost is HTTP, so the player must allow insecure HTTP (PlayerSettings.insecureHttpOption).
 using System;
 using System.Collections;
 using System.Text;

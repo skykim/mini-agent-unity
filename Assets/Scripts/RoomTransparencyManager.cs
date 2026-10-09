@@ -51,14 +51,6 @@ public class RoomTransparencyManager : MonoBehaviour
     [Header("Debug / Current State")]
     [SerializeField] private RoomState _currentRoom = RoomState.Kitchen;
 
-    public float TransparencyPercent
-    {
-        get => _transparencyPercent;
-        set => _transparencyPercent = Mathf.Clamp(value, 0f, 100f);
-    }
-
-    public RoomState CurrentRoom => _currentRoom;
-
     private class ManagedRenderer
     {
         public Renderer renderer;
