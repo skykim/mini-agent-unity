@@ -5,6 +5,7 @@
 //   get_location-> ip-api.com (IP geolocation stand-in for GPS on desktop)
 using System;
 using System.Collections;
+using System.Globalization;
 using System.Text;
 using UnityEngine;
 using UnityEngine.Networking;
@@ -49,11 +50,11 @@ namespace NeedleTest
 
         [Serializable] class GeoResp { public GeoHit[] results; }
         [Serializable] class GeoHit
-        { public float latitude, longitude; public long population; public string name, timezone, country; }
+        { public float latitude, longitude; public long population; public string timezone; }
         [Serializable] class WxResp { public Wx current_weather; }
         [Serializable] class Wx { public float temperature, windspeed; public int weathercode; }
         [Serializable] class IpResp { public string city, regionName, country, timezone; }
-        [Serializable] class DdgResp { public string AbstractText, Answer, Definition, Heading; }
+        [Serializable] class DdgResp { public string AbstractText, Answer, Definition; }
 
         static IEnumerator Get(string url, Action<string> ok, Action<string> fail)
         {
@@ -72,8 +73,8 @@ namespace NeedleTest
 
         static IEnumerator Geocode(string city, Action<GeoHit> done)
         {
-            // language=en + pick-most-populous: language=ko silently drops the real
-            // "New York" from the ranking (top hit becomes York, Nebraska)
+            // English names match the lookup; of the hits, keep the most populous one
+            // so "New York" wins over smaller namesakes.
             GeoHit hit = null;
             yield return Get(
                 "https://geocoding-api.open-meteo.com/v1/search?count=5&language=en&name=" +
@@ -200,7 +201,13 @@ namespace NeedleTest
                 var val = new StringBuilder();
                 while (i < json.Length && json[i] != '"')
                 {
-                    if (json[i] == '\\' && i + 1 < json.Length) { val.Append(json[i + 1]); i += 2; }
+                    if (json[i] == '\\' && i + 1 < json.Length)
+                    {
+                        if (json[i + 1] == 'u' && i + 5 < json.Length &&
+                            int.TryParse(json.Substring(i + 2, 4), NumberStyles.HexNumber, CultureInfo.InvariantCulture, out int code))
+                        { val.Append((char)code); i += 6; }
+                        else { val.Append(json[i + 1]); i += 2; }
+                    }
                     else { val.Append(json[i]); i++; }
                 }
                 var s = val.ToString().Trim();

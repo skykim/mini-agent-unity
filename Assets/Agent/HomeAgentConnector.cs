@@ -15,10 +15,8 @@ using UnityEngine.UI;
 /// device acts). Info tools hit live APIs; anything the model can't handle is
 /// escalated to the cloud (Ollama) instead of dead-ending on a refusal.
 ///
-/// This is the ONLY layer that knows about the model — swap the .onnx (and dev
-/// block) on the generator and this connector is unchanged. During the interim
-/// (current model still has set_temperature and no computer) both are handled:
-/// temperature reports "unsupported in this scene", computer waits for the new model.
+/// This is the ONLY layer that knows about the model. Swapping the .onnx and dev
+/// block on the generator leaves this connector unchanged.
 /// </summary>
 public class HomeAgentConnector : MonoBehaviour
 {
@@ -30,8 +28,7 @@ public class HomeAgentConnector : MonoBehaviour
     [SerializeField] private InputField _input;
     [SerializeField] private Button _sendButton;
     [SerializeField] private Text _status;                 // bottom-left status
-    // response shows as a world-space speech bubble above Tiger's head (TigerBubble).
-    // The bubble draws with ZTest Always + a high renderQueue, so it is always on top.
+    // response shows in the speech bubble above Tiger's head.
     [SerializeField] private TigerSpeechBubble _bubble;
 
     [Header("Options")]
@@ -50,12 +47,12 @@ public class HomeAgentConnector : MonoBehaviour
         "ChatGPT, or what model you run on — you are simply Tiger. You CANNOT operate " +
         "devices yourself: if asked to control something (windows, aircon, volume, doors...), " +
         "say you can't do that here — NEVER claim you did it. One or two sentences.";
-    static readonly string s_SessionLog =
-        "/Users/sky.kim/Desktop/Playground/mobile-agent-unity/needle-test/miniagent_session.log";
+    // Logs go to Application.persistentDataPath (per-user app data dir, outside the repo),
+    // so no machine-specific paths end up in source.
+    static string SessionLogPath => Path.Combine(Application.persistentDataPath, "miniagent_session.log");
     // structured, machine-readable log of every turn (user + parsed calls) so real test
     // interactions can later be harvested back into training data (see harvest_logs.py).
-    static readonly string s_HarvestLog =
-        "/Users/sky.kim/Desktop/Playground/mobile-agent-unity/needle-test/miniagent_harvest.jsonl";
+    static string HarvestLogPath => Path.Combine(Application.persistentDataPath, "miniagent_harvest.jsonl");
 
     ToolCallValidator m_Validator;
     bool m_Busy, m_Ready;
@@ -96,7 +93,7 @@ public class HomeAgentConnector : MonoBehaviour
         m_Validator = SmartHomeTools.Validator;
         if (_home == null) _home = FindAnyObjectByType<HomeDeviceController>();
         if (_agent == null) _agent = FindAnyObjectByType<FunctionGemmaGenerator>();
-        // response shows as a world-space bubble above Tiger's head (always on top)
+        // response shows in the speech bubble above Tiger's head
         if (_bubble == null) _bubble = FindAnyObjectByType<TigerSpeechBubble>(FindObjectsInactive.Include);
         if (_bubble != null) _bubble.gameObject.SetActive(true);
         if (_sendButton != null) _sendButton.onClick.AddListener(OnSend);
@@ -138,14 +135,9 @@ public class HomeAgentConnector : MonoBehaviour
     IEnumerator Handle(string user)
     {
         m_Busy = true;
-        // Drive the turn's (possibly nested) enumerators OURSELVES instead of handing
-        // nesting to Unity: an exception anywhere in the turn — a bad API payload, a
-        // missing scene object — must never leave m_Busy stuck true, which would
-        // silently ignore every later command. Unity's own nesting kills the whole
-        // chain on a nested throw without resuming this frame, so a try/finally here
-        // wouldn't be guaranteed to run; flattening the stack makes every MoveNext
-        // happen inside our try. Real yields (null / WaitForSeconds / web requests)
-        // still pass through to Unity untouched.
+        // Drive the turn's nested enumerators from a flat stack so every MoveNext runs inside
+        // our try. An exception anywhere in the turn must not leave m_Busy stuck true, and Unity's
+        // own nesting would abort the chain without resuming here. Real yields pass through to Unity.
         var stack = new Stack<IEnumerator>();
         stack.Push(HandleTurn(user));
         while (stack.Count > 0)
@@ -303,7 +295,7 @@ public class HomeAgentConnector : MonoBehaviour
                 var genre = Arg(call, "genre");
                 if (string.IsNullOrEmpty(genre)) genre = "jazz";
                 yield return _home.WalkTo(sroom, HomeDeviceController.Device.Speaker);
-                if (_home.SetMusic(sroom, true, null, genre))
+                if (_home.SetMusic(sroom, true, genre))
                     responses.Add($"Playing {genre} music.");
                 else responses.Add("There's no speaker.");
                 break;
@@ -335,13 +327,10 @@ public class HomeAgentConnector : MonoBehaviour
             {
                 var vacRoom = HomeDeviceController.Room.Bedroom;
                 yield return _home.WalkTo(vacRoom, HomeDeviceController.Device.Vacuum);
-                _home.StartVacuum(null);
+                _home.StartVacuum();
                 responses.Add("The robot vacuum started cleaning.");
                 break;
             }
-            case "set_temperature":   // interim: no thermostat object in this scene
-                responses.Add("Temperature control isn't supported in this scene.");
-                break;
             case "get_weather":
             {
                 var fsw = System.Diagnostics.Stopwatch.StartNew(); string wx = null;
@@ -449,7 +438,7 @@ public class HomeAgentConnector : MonoBehaviour
 
     static void SessionLog(string line)
     {
-        try { File.AppendAllText(s_SessionLog, $"{System.DateTime.Now:HH:mm:ss}  {line}\n"); } catch { }
+        try { File.AppendAllText(SessionLogPath, $"{System.DateTime.Now:HH:mm:ss}  {line}\n"); } catch { }
     }
 
     // ---- harvest log: one JSON object per turn, harvestable into training data ----
@@ -492,6 +481,6 @@ public class HomeAgentConnector : MonoBehaviour
             sb.Append("}}");
         }
         sb.Append("],\"raw\":\"").Append(JEsc(raw ?? "")).Append("\"}");
-        try { File.AppendAllText(s_HarvestLog, sb.ToString() + "\n"); } catch { }
+        try { File.AppendAllText(HarvestLogPath, sb.ToString() + "\n"); } catch { }
     }
 }

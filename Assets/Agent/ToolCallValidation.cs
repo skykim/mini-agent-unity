@@ -3,19 +3,15 @@
 // Sits between the model's raw output and the executor: a call is executed ONLY
 // if its function name is registered, every argument exists in the schema, all
 // required arguments are present, and every value parses/checks against its
-// declared type, range, and enum. This is the hard floor under the model —
-// stress-eval showed fine-tuned SLMs can hallucinate nonexistent functions
-// (call:multiply), nonexistent args (language:), and out-of-range values
-// (celsius:50 on a status question); all of those die here, in plain code.
+// declared type, range, and enum. This is the hard floor under the model: fine-tuned
+// SLMs can emit nonexistent functions (call:multiply), nonexistent arguments, and
+// out-of-range values, and all of those are rejected here.
 //
-// Pure C# (no Unity/Sentis deps) so it is unit-testable in batchmode and
-// reusable for both output formats:
-//   - FunctionGemma flat calls:  call:NAME{k:v,k:<escape>free text<escape>}
-//   - Needle JSON array calls:   feed name + parsed args via Validate(name, args)
+// Pure C# (no Unity dependency), so it can be unit-tested outside the engine.
+// Input format: FunctionGemma flat calls, call:NAME{k:v,k:<escape>free text<escape>}
 using System;
 using System.Collections.Generic;
 using System.Globalization;
-using System.Text;
 
 namespace NeedleTest
 {
@@ -50,9 +46,6 @@ namespace NeedleTest
     {
         public bool Ok;
         public string Reason;      // set when rejected
-        public string Canonical;   // "name(k=v, ...)" when accepted
-
-        public override string ToString() => Ok ? $"VALID {Canonical}" : $"REJECTED ({Reason})";
     }
 
     public sealed class ToolCallValidator
@@ -73,8 +66,6 @@ namespace NeedleTest
                 return Reject($"unknown function '{name}'");
 
             var seen = new HashSet<string>(StringComparer.Ordinal);
-            var canon = new StringBuilder(spec.Name).Append('(');
-            bool first = true;
             foreach (var kv in args)
             {
                 ToolParamSpec p = null;
@@ -107,15 +98,13 @@ namespace NeedleTest
                             return Reject($"argument '{kv.Key}'='{v}' not in enum");
                         break;
                 }
-                canon.Append(first ? "" : ", ").Append(kv.Key).Append('=').Append(v);
-                first = false;
             }
 
             foreach (var q in spec.Params)
                 if (q.Required && !seen.Contains(q.Name))
                     return Reject($"missing required argument '{q.Name}'");
 
-            return new ValidationResult { Ok = true, Canonical = canon.Append(')').ToString() };
+            return new ValidationResult { Ok = true };
         }
 
         static ValidationResult Reject(string reason) =>
@@ -177,7 +166,7 @@ namespace NeedleTest
                 string key = body.Substring(i, colon - i).Trim();
                 i = colon + 1;
                 string val;
-                if (string.CompareOrdinal(body, i, Escape, 0, Math.Min(Escape.Length, body.Length - i)) == 0)
+                if (i + Escape.Length <= body.Length && string.CompareOrdinal(body, i, Escape, 0, Escape.Length) == 0)
                 {
                     int vs = i + Escape.Length;
                     int ve = body.IndexOf(Escape, vs, StringComparison.Ordinal);
@@ -202,12 +191,9 @@ namespace NeedleTest
     /// <summary>The smart-home tool registry used by the demo/agent.</summary>
     public static class SmartHomeTools
     {
-        // v-next final schema (16 tools). Rooms apply ONLY to lights; TV / computer /
-        // vacuum / speaker are single devices with no room. To keep BOTH the currently
-        // deployed model and the retrained one passing the gate across the fp16 swap, the
-        // room-less device tools TOLERATE a stray `room` arg (the connector ignores it),
-        // and set_temperature is kept as an interim no-op the old model may still emit.
-        // Stateless after construction — built once and shared.
+        // 16 tools. Rooms apply ONLY to lights; TV / computer / vacuum / speaker are single
+        // devices with no room. Room-less device tools tolerate a stray `room` arg (the
+        // connector ignores it). Stateless after construction, built once and shared.
         public static ToolCallValidator Validator { get; } = new(new[]
         {
             new ToolSpec("turn_on_light",
@@ -250,12 +236,6 @@ namespace NeedleTest
             new ToolSpec("get_location"),
             new ToolSpec("web_search",
                 new ToolParamSpec("query", "string", required: true)),
-
-            // interim: the currently deployed model may still emit this; treated as a
-            // no-op by the connector until the fp16 redeploy of the v-next model.
-            new ToolSpec("set_temperature",
-                new ToolParamSpec("room", "string", required: true),
-                new ToolParamSpec("celsius", "number", required: true, min: 5, max: 35)),
         });
     }
 }
