@@ -77,18 +77,18 @@ When no valid tool call comes out (e.g. `오늘 기분 어때?`), the turn defer
 The turn orchestration, status UI, and per-turn timing/harvest logging live in `HomeAgentConnector.cs`.
 
 ## 🧠 On-Device Model
-The model comes from the Unity package [`com.sky-kim.functiongemma-home`](https://huggingface.co/Sky-Kim/com.sky.sentis.functiongemma.home), declared in `Packages/manifest.json`. On the first Editor start, the package downloads **`functiongemma_home_f32.sentis`** (about 1.7 GB) into `Assets/StreamingAssets/Agent/`, with a progress bar. The tokenizer and developer block are copied from the package. To download the model again, use **Tools > FunctionGemma > Download model**.
-
-Without the model file the scene still opens and the tiger is controllable with `WASD`. On-device inference stays disabled (a "model not found" message is logged) until the download finishes.
+The model comes from the Unity package [`com.sky-kim.functiongemma-home`](https://huggingface.co/Sky-Kim/com.sky.sentis.functiongemma.home), declared in `Packages/manifest.json`. The package ships **`functiongemma_home_uint8.sentis`** (uint8 weights, about 436 MB), the tokenizer and the developer block in its `Models~` folder, so the Package Manager downloads everything once with the package. The Editor reads the files straight from the package cache; a player build gets a copy in `StreamingAssets/FunctionGemmaHome` for the build only, and Android copies it out of the APK on first launch.
 
 The training, quantization, and export pipeline that produced this model is in the companion repo **[Sky-Kim/functiongemma-270m-finetune](https://huggingface.co/Sky-Kim/functiongemma-270m-finetune)**.
 
 ## ☁️ Cloud Fallback (optional)
 Configured on the `HomeAgentConnector` component:
 
-* **Endpoint:** `http://localhost:11434/v1/chat/completions` (default: a local [Ollama](https://ollama.com) server)
+* **Endpoint:** `http://192.168.0.33:11434/v1/chat/completions`: an [Ollama](https://ollama.com) server on a PC in the same Wi-Fi network, so a phone build reaches it too. Change the address to your PC's LAN IP.
 * **Model:** `gpt-oss:120b-cloud`
 * **Toggle:** `Use Cloud Fallback` (on by default)
+
+Ollama listens on `127.0.0.1` only by default. To accept requests from the phone, run it on all interfaces (`launchctl setenv OLLAMA_HOST 0.0.0.0` on macOS, then restart Ollama) and allow incoming connections if the firewall asks. Players allow plain HTTP for this (`Allow downloads over HTTP` in Player Settings).
 
 Any OpenAI-compatible endpoint works; point it wherever you like, or disable it entirely.
 
@@ -97,6 +97,7 @@ Any OpenAI-compatible endpoint works; point it wherever you like, or disable it 
 Assets/
 ├─ Agent/
 │  ├─ HomeAgentConnector.cs       # turn orchestration, UI, timing/harvest logging, cloud fallback
+│  ├─ CommandSuggestions.cs       # example command buttons above the input field + shuffle
 │  ├─ ToolCallValidation.cs       # tool schemas + validating gate
 │  ├─ AgentCloudClient.cs         # OpenAI-compatible chat-completions client
 │  ├─ AgentInfoApis.cs            # weather / time / location / web_search backends
@@ -106,23 +107,25 @@ Assets/
 ├─ Scripts/
 │  ├─ HomeDeviceController.cs     # device state (lights, TV, speaker, vacuum)
 │  ├─ TigerController.cs          # WASD + NavMesh movement
-│  └─ RoomTransparencyManager.cs  # fades away walls of the room in view
-├─ Resources/Music/              # jazz.wav / lofi.wav / rock.wav (synthesized loops)
-└─ StreamingAssets/Agent/        # tokenizer.json, fg_dev_block_home.txt, (+ the .sentis the package downloads)
+│  └─ RoomTransparencyManager.cs  # fades away walls of the rooms the tiger isn't in
+├─ Materials/Mat_TransparentVariant.mat  # keeps the transparent URP Lit variant in player builds
+└─ Resources/Music/              # jazz.wav / lofi.wav / rock.wav (synthesized loops)
 
-Packages/com.sky-kim.functiongemma-home/   # FunctionGemmaGenerator (Sentis inference: KV cache, prefix cache, GPU argmax, masks) and the model downloader
+com.sky-kim.functiongemma-home (git package from Hugging Face)
+                                 # FunctionGemmaGenerator (Sentis inference: KV cache, prefix cache, GPU argmax, masks)
+                                 # and Models~ (uint8 model, tokenizer, developer block)
 ```
 
 ## ▶️ Running
-1. Open the project in **Unity 6000.5.5f1** (URP).
-2. Open the project once and wait for the model download to finish (see above).
+1. Open the project in **Unity 6000.6.1f1** (URP).
+2. Wait for the Package Manager to resolve the packages; the first time it downloads the FunctionGemma package with its model (about 436 MB).
 3. Open `Assets/Scenes/MiniAgentScene.unity` and press **Play**.
 4. Type a command in the on-screen input box and send it, or move the tiger with `W` `A` `S` `D`.
 
 A `MiniAgentTestRunner` component can auto-run a scripted list of commands a few seconds after the scene starts (all configurable in the Inspector).
 
 ## 🛠 Environment
-* **Unity:** 6000.5.5f1
+* **Unity:** 6000.6.1f1
 * **Render Pipeline:** URP
 * **Inference:** Unity Sentis (`com.unity.ai.inference` 2.6.1), `GPUCompute` backend, via the `com.sky-kim.functiongemma-home` package
 * **Navigation:** Unity AI Navigation (`com.unity.ai.navigation`)

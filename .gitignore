@@ -108,5 +108,8 @@ InitTestScene*.unity*
 # macOS
 .DS_Store
 # On-device model weights are large (hundreds of MB) — keep them out of git.
-# Download from Hugging Face: Sky-Kim/functiongemma-270m-finetune  (sentis/)
-Assets/StreamingAssets/Agent/*.sentis
+# Model files copied in from the functiongemma package for a player build only (FunctionGemmaBuildStaging)
+Assets/StreamingAssets/FunctionGemmaHome/
+Assets/StreamingAssets/FunctionGemmaHome.meta
+
+.vscode/

@@ -36,6 +36,11 @@ public class RoomTransparencyManager : MonoBehaviour
     [Tooltip("Transparency fade duration (seconds; 0 = instant)")]
     [SerializeField] private float _fadeDuration = 0.25f;
 
+    [Tooltip("A URP Lit material set up like the runtime transparent copies (Surface Transparent + _EMISSION). " +
+             "Nothing in the project is transparent otherwise, so player builds strip that shader variant and the " +
+             "faded rooms render opaque on device; referencing this material keeps the variant in the build.")]
+    [SerializeField] private Material _transparentVariant;
+
     [Header("Room Root GameObjects")]
     [SerializeField] private GameObject _kitchenRoot;
     [SerializeField] private GameObject _sharedWallX15;
