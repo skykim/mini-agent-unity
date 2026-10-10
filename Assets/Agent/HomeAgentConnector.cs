@@ -108,7 +108,7 @@ public class HomeAgentConnector : MonoBehaviour
     {
         yield return null;
         var sw = System.Diagnostics.Stopwatch.StartNew();
-        _agent.Warmup();
+        yield return _agent.WarmupRoutine();   // on Android, copies the model out of the APK first
         sw.Stop();
         m_Ready = true;
         SetStatus($"Warmup {sw.ElapsedMilliseconds}ms");
